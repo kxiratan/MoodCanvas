@@ -7,8 +7,8 @@ MoodCanvas.ai is a standalone web application that reimagines the way teams shar
 Unlike traditional collaborative whiteboards, MoodCanvas.ai helps teams read between the lines, helping leaders and cross-teams sense emotional alignment, uncover hidden concerns, and be completely transparent between every individual's project sentiment.
 
 ## Features
-- Multi-board management: create unlimited boards with clean Apple Notes-style sidebar
-- Infinite canvas: add draggable text boxes anywhere to infinite canvas
+- Multi-board management: create unlimited boards from home page
+- Infinite canvas: add draggable text boxes, sticky notes, or free draw anywhere on infinite canvas
 - Real-time AI analysis: instant emotion detection from user text
 - Dynamic color themes: gradient color background based on team's overall AI-detected emotions
 - Adaptive soundscapes: ambient music that evolves with your team's energy
