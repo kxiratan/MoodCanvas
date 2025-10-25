@@ -36,11 +36,10 @@ Unlike traditional collaborative whiteboards, MoodCanvas.ai helps teams read bet
 **Audio:**
 - 
 
-
+## Future Vision
 
 ## Contributors
 - Lily Luc
 - Ferdinand Nacional
 - Keira Tan
 
-## Future Vision
