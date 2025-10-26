@@ -3,6 +3,9 @@ import { Card } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { X, GripVertical, User } from 'lucide-react';
 import { useSession } from '@/contexts/SessionContext';
+import { ThemeManager } from '@/utils/themeManager';
+import { MoodType } from '@/types/mood';
+import { MoodEngine } from '@/utils/moodEngine';
 
 interface StickyNoteComponentProps {
   id: string;
@@ -29,10 +32,38 @@ const StickyNoteComponent: React.FC<StickyNoteComponentProps> = ({
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [position, setPosition] = useState({ x, y });
   const [currentText, setCurrentText] = useState(text);
+  const [noteMood, setNoteMood] = useState<MoodType>('neutral');
+  const [moodColor, setMoodColor] = useState(color);
   const cardRef = useRef<HTMLDivElement>(null);
   const { userName } = useSession();
   const currentUserId = localStorage.getItem('userId') || 'anonymous';
   const isOwnNote = userId === currentUserId;
+  const moodEngine = React.useMemo(() => new MoodEngine(), []);
+
+  // Analyze text for mood whenever it changes
+  useEffect(() => {
+    if (currentText.trim()) {
+      const mood = moodEngine.analyzeSentiment({
+        text: currentText,
+        type: 'text',
+        timestamp: Date.now(),
+        userId: currentUserId
+      });
+      setNoteMood(mood.type);
+      // Use the ThemeManager to get colors and apply them
+      const newColor = ThemeManager.moodColors[mood.type]?.main || ThemeManager.moodColors.neutral.main;
+      setMoodColor(newColor);
+      
+      // Only update the parent if the text has changed
+      if (text !== currentText) {
+        onUpdate(id, currentText, position.x, position.y);
+      }
+    } else {
+      setNoteMood('neutral');
+      setMoodColor(ThemeManager.moodColors.neutral.main);
+      setMoodColor(ThemeManager['moodColors'].neutral.main);
+    }
+  }, [currentText, currentUserId, id, moodEngine, onUpdate, position.x, position.y, text]);
 
   useEffect(() => {
     setPosition({ x, y });
@@ -101,7 +132,7 @@ const StickyNoteComponent: React.FC<StickyNoteComponentProps> = ({
       style={{
         left: position.x,
         top: position.y,
-        backgroundColor: color,
+        backgroundColor: moodColor || ThemeManager.moodColors.neutral.main,
         transform: isDragging ? 'scale(1.05) rotate(2deg)' : 'scale(1) rotate(0deg)',
         transition: isDragging ? 'none' : 'transform 0.2s',
         cursor: isDragging ? 'grabbing' : 'grab',
