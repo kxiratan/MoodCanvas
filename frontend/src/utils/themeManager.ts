@@ -1,31 +1,31 @@
 import { MoodType, ThemeConfig } from '@/types/mood';
 
 export class ThemeManager {
-  // Emotional color mapping
-  private static moodColors: Record<MoodType, { main: string; accent: string }> = {
+  // Emotional color mapping with pastel sticky note colors
+  static moodColors: Record<MoodType, { main: string; accent: string }> = {
     positive: {
-      main: 'yellow', // Joy, optimism
-      accent: 'green'  // Growth, harmony
+      main: '#fff9c4', // Light sunny yellow
+      accent: '#c5e1a5'  // Light green
     },
     energetic: {
-      main: 'red',     // Energy, passion
-      accent: 'yellow' // Vitality
+      main: '#ffcdd2',  // Light energetic red
+      accent: '#fff9c4'  // Light yellow
     },
     calm: {
-      main: 'blue',    // Serenity, peace
-      accent: 'beige'  // Stability
+      main: '#b3e5fc',  // Light serene blue
+      accent: '#fff3e0'  // Light beige
     },
     negative: {
-      main: 'purple',  // Complexity, depth
-      accent: 'blue'   // Introspection
+      main: '#e1bee7',  // Light purple
+      accent: '#bbdefb'  // Light blue
     },
     neutral: {
-      main: 'beige',   // Balance, neutrality
-      accent: 'white'  // Clarity
+      main: '#fff3e0',  // Light beige
+      accent: '#ffffff'  // White
     },
     chaotic: {
-      main: 'red',     // Intensity
-      accent: 'purple' // Transformation
+      main: '#ffcdd2',  // Light red
+      accent: '#e1bee7'  // Light purple
     }
   };
 
