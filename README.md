@@ -37,13 +37,13 @@ Unlike traditional collaborative whiteboards, MoodCanvas helps teams read betwee
 - Node.js
 - Express
 
-**Run and Build**
+### Run and Build
 - Backend Setup:
 ```
 cd backend && npm run dev
 ```
 
-- Frontend Build:
+- Frontend Setup:
 ```
 cd frontend && npm run dev
 ```
