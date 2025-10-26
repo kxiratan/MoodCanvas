@@ -20,9 +20,12 @@ Unlike traditional collaborative whiteboards, MoodCanvas helps teams read betwee
 - Cross-team meetings
 - Crisis-management meetings
 
-## Installation
-
 ## Usage
+- Create unlimited boards on homepage and join sessions by entering unique session ID of existing sessions
+- Add text boxes and sticky notes to infinite canvas
+- Use draw feature to create diagrams, sketches, or annotations
+- Chat with your team in the team chat sidebar
+- AI analyzes sentiments from user text in chat or on the board and changes colors to reflect emotions real-time
 
 ## Architecture
 ### Tech Stack
@@ -35,6 +38,10 @@ Unlike traditional collaborative whiteboards, MoodCanvas helps teams read betwee
 - Express
 
 ## Future Vision
+- Zoom, Slack, and Figma integration
+- Pre-built template boards for stand-ups, retros, etc.
+- Advanced analytics revealing mood summaries and team well-being insights
+- Cultural customizations applying different mood interpretations per company
 
 ## Contributors
 - Lily Luc
