@@ -37,6 +37,17 @@ Unlike traditional collaborative whiteboards, MoodCanvas helps teams read betwee
 - Node.js
 - Express
 
+**Run and Build**
+- Backend Setup:
+```
+cd backend && npm run dev
+```
+
+- Frontend Build:
+```
+cd frontend && npm run dev
+```
+
 ## Future Vision
 - Zoom, Slack, and Figma integration
 - Pre-built template boards for stand-ups, retros, etc.
