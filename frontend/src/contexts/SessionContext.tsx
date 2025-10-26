@@ -5,6 +5,7 @@ import { Session, ChatMessage } from '@/types/session';
 import { CanvasState } from '@/types/canvas';
 import { MoodState } from '@/types/mood';
 import { MoodEngine } from '@/utils/moodEngine';
+import { ThemeManager } from '@/utils/themeManager';
 
 interface SessionContextType {
   currentSession: Session | null;
@@ -78,6 +79,39 @@ export const SessionProvider: React.FC<SessionProviderProps> = ({ children }) =>
         setCurrentSession(session);
         loadSessionData(savedSessionId);
       }
+    }
+  }, []);
+
+  // Initialize socket connection and listeners
+  useEffect(() => {
+    try {
+      socketEvents.connect();
+
+      const handleIncomingMessage = (data: { user: string; text: string; timestamp: number }) => {
+        const newMessage: ChatMessage = {
+          id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          userId: data.user,
+          userName: data.user,
+          text: data.text,
+          timestamp: data.timestamp,
+        };
+        setChatMessages(prev => [...prev, newMessage]);
+      };
+
+      const handleMood = (moodState: MoodState) => {
+        setCurrentMood(moodState);
+      };
+
+      socket.on('chat_message', handleIncomingMessage);
+      socket.on('mood_update', handleMood);
+
+      return () => {
+        socket.off('chat_message', handleIncomingMessage);
+        socket.off('mood_update', handleMood);
+        socketEvents.disconnect();
+      };
+    } catch (e) {
+      // ignore in non-browser environments
     }
   }, []);
 
@@ -203,6 +237,15 @@ export const SessionProvider: React.FC<SessionProviderProps> = ({ children }) =>
 
     setChatMessages(prev => [...prev, newMessage]);
 
+    // Emit chat message over socket if connected and a session exists
+    if (currentSession) {
+      try {
+        socketEvents.sendMessage(currentSession.id, message.userName || userName, message.text);
+      } catch (e) {
+        // ignore if socket not available
+      }
+    }
+
     // Analyze sentiment if not AI message
     if (!message.isAI && message.text) {
       const sentiment = moodEngine.analyzeSentiment({
@@ -232,6 +275,23 @@ export const SessionProvider: React.FC<SessionProviderProps> = ({ children }) =>
   const updateMood = (mood: MoodState) => {
     setCurrentMood(mood);
   };
+
+  // Apply CSS variables for the current mood so UI (buttons, backgrounds)
+  // that use the design system tokens pick up the mood colors. We intentionally
+  // do NOT change the canvas background here so the drawing area remains
+  // visually isolated from the mood styling.
+  useEffect(() => {
+    try {
+      const vars = ThemeManager.getCssVars(currentMood.type);
+      Object.entries(vars).forEach(([key, value]) => {
+        document.documentElement.style.setProperty(key, value);
+      });
+    } catch (e) {
+      // If document isn't available (SSR) or something fails, silently ignore.
+      // This keeps the client-side behavior intact.
+      console.warn('Failed to apply theme CSS variables', e);
+    }
+  }, [currentMood.type, currentMood.intensity]);
 
   return (
     <SessionContext.Provider

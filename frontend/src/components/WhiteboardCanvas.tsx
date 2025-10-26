@@ -36,10 +36,121 @@ const WhiteboardCanvas: React.FC<WhiteboardCanvasProps> = ({
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentStroke, setCurrentStroke] = useState<{ x: number; y: number }[]>([]);
   const [spacePressed, setSpacePressed] = useState(false);
-  const { sessionId, username } = useSession();
+  const { sessionId, userName } = useSession();
   const drawingElements = useRef<DrawingStroke[]>([]);
 
-  const drawElements = (elements: DrawingStroke[]) => {
+  const getStrokeStyle = React.useCallback((type: string, baseWidth: number) => {
+    switch (type) {
+      case 'pencil':
+        return {
+          lineCap: 'round' as CanvasLineCap,
+          lineJoin: 'round' as CanvasLineJoin,
+          width: baseWidth * 0.8,
+          opacityMultiplier: 0.7
+        };
+      case 'marker':
+        return {
+          lineCap: 'square' as CanvasLineCap,
+          lineJoin: 'miter' as CanvasLineJoin,
+          width: baseWidth * 1.5,
+          opacityMultiplier: 0.9
+        };
+      case 'highlighter':
+        return {
+          lineCap: 'butt' as CanvasLineCap,
+          lineJoin: 'bevel' as CanvasLineJoin,
+          width: baseWidth * 3,
+          opacityMultiplier: 0.3
+        };
+      default:
+        return {
+          lineCap: 'round' as CanvasLineCap,
+          lineJoin: 'round' as CanvasLineJoin,
+          width: baseWidth,
+          opacityMultiplier: 1
+        };
+    }
+  }, []);
+
+  const drawStroke = React.useCallback((ctx: CanvasRenderingContext2D, stroke: DrawingStroke) => {
+    if (stroke.points.length < 2) return;
+
+    const style = getStrokeStyle(stroke.sketchType, stroke.width);
+    ctx.lineCap = style.lineCap;
+    ctx.lineJoin = style.lineJoin;
+    ctx.lineWidth = style.width;
+
+    // Apply sketch-specific rendering
+    switch (stroke.sketchType) {
+      case 'pencil':
+        ctx.strokeStyle = stroke.color;
+        ctx.globalAlpha = (stroke.opacity / 100) * style.opacityMultiplier;
+        for (let offset = 0; offset < 3; offset++) {
+          ctx.globalAlpha = ((stroke.opacity / 100) * style.opacityMultiplier) * (1 - offset * 0.2);
+          ctx.beginPath();
+          ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+          for (let i = 1; i < stroke.points.length; i++) {
+            const jitter = (Math.random() - 0.5) * 0.5;
+            ctx.lineTo(stroke.points[i].x + jitter, stroke.points[i].y + jitter);
+          }
+          ctx.stroke();
+        }
+        break;
+      case 'marker':
+        ctx.strokeStyle = stroke.color;
+        ctx.globalAlpha = (stroke.opacity / 100) * style.opacityMultiplier;
+        ctx.beginPath();
+        ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+        for (let i = 1; i < stroke.points.length; i++) {
+          ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+        }
+        ctx.stroke();
+        ctx.globalAlpha = ((stroke.opacity / 100) * style.opacityMultiplier) * 0.3;
+        ctx.lineWidth = style.width * 1.1;
+        ctx.beginPath();
+        ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+        for (let i = 1; i < stroke.points.length; i++) {
+          ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+        }
+        ctx.stroke();
+        break;
+      case 'highlighter':
+        ctx.strokeStyle = stroke.color;
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.globalAlpha = (stroke.opacity / 100) * style.opacityMultiplier;
+        ctx.lineWidth = style.width;
+        ctx.beginPath();
+        ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+        for (let i = 1; i < stroke.points.length; i++) {
+          ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+        }
+        ctx.stroke();
+        ctx.globalAlpha = ((stroke.opacity / 100) * style.opacityMultiplier) * 0.5;
+        ctx.lineWidth = style.width * 1.2;
+        ctx.beginPath();
+        ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+        for (let i = 1; i < stroke.points.length; i++) {
+          ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+        }
+        ctx.stroke();
+        ctx.globalCompositeOperation = 'source-over';
+        break;
+      default:
+        ctx.strokeStyle = stroke.color;
+        ctx.globalAlpha = stroke.opacity / 100;
+        ctx.beginPath();
+        ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+        for (let i = 1; i < stroke.points.length; i++) {
+          ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+        }
+        ctx.stroke();
+        break;
+    }
+
+    ctx.globalAlpha = 1;
+  }, [getStrokeStyle]);
+
+  const drawElements = React.useCallback((elements: DrawingStroke[]) => {
     if (!canvasRef.current) return;
     const ctx = canvasRef.current.getContext('2d');
     if (!ctx) return;
@@ -61,10 +172,11 @@ const WhiteboardCanvas: React.FC<WhiteboardCanvasProps> = ({
 
     // Store elements
     drawingElements.current = elements;
-  };
+  }, [transform, drawStroke]);
+  
 
   useEffect(() => {
-    if (!sessionId || !username) return;
+    if (!sessionId || !userName) return;
 
     // Set up socket event listener for canvas updates
     socketEvents.onCanvasUpdate((elements) => {
@@ -78,7 +190,19 @@ const WhiteboardCanvas: React.FC<WhiteboardCanvasProps> = ({
       socketEvents.updateCanvas(sessionId, drawingElements.current);
     }
 
+    const isTypingInInput = (target: EventTarget | null) => {
+      if (!target || !(target instanceof HTMLElement)) return false;
+      const tag = target.tagName.toLowerCase();
+      if (tag === 'input' || tag === 'textarea') return true;
+      if (target.isContentEditable) return true;
+      return false;
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
+      // If the user is currently typing in an input/textarea/contenteditable
+      // do not intercept the Space key so they can insert spaces.
+      if (isTypingInInput(e.target)) return;
+
       if (e.code === 'Space' && !e.repeat) {
         e.preventDefault();
         setSpacePressed(true);
@@ -86,153 +210,24 @@ const WhiteboardCanvas: React.FC<WhiteboardCanvasProps> = ({
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
+      if (isTypingInInput(e.target)) return;
+
       if (e.code === 'Space') {
         e.preventDefault();
         setSpacePressed(false);
       }
     };
 
+    // Use window for both add and remove to avoid mismatched listeners
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
 
     return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
       socketEvents.cleanup();
     };
-  }, []);
-
-  const getStrokeStyle = (type: string, baseWidth: number) => {
-    switch (type) {
-      case 'pencil':
-        return { 
-          lineCap: 'round' as CanvasLineCap, 
-          lineJoin: 'round' as CanvasLineJoin,
-          width: baseWidth * 0.8,
-          opacityMultiplier: 0.7
-        };
-      case 'marker':
-        return { 
-          lineCap: 'square' as CanvasLineCap, 
-          lineJoin: 'miter' as CanvasLineJoin,
-          width: baseWidth * 1.5,
-          opacityMultiplier: 0.9
-        };
-      case 'highlighter':
-        return { 
-          lineCap: 'butt' as CanvasLineCap, 
-          lineJoin: 'bevel' as CanvasLineJoin,
-          width: baseWidth * 3,
-          opacityMultiplier: 0.3
-        };
-      default: // pen
-        return { 
-          lineCap: 'round' as CanvasLineCap, 
-          lineJoin: 'round' as CanvasLineJoin,
-          width: baseWidth,
-          opacityMultiplier: 1
-        };
-    }
-  };
-
-  const drawStroke = (ctx: CanvasRenderingContext2D, stroke: DrawingStroke) => {
-    if (stroke.points.length < 2) return;
-
-    const style = getStrokeStyle(stroke.sketchType, stroke.width);
-    
-    ctx.lineCap = style.lineCap;
-    ctx.lineJoin = style.lineJoin;
-    ctx.lineWidth = style.width;
-
-    // Apply sketch-specific rendering
-    switch (stroke.sketchType) {
-      case 'pencil':
-        // Pencil: grainy, sketchy texture with variable opacity
-        ctx.strokeStyle = stroke.color;
-        ctx.globalAlpha = (stroke.opacity / 100) * style.opacityMultiplier;
-        
-        // Draw multiple thin lines with slight offset for texture
-        for (let offset = 0; offset < 3; offset++) {
-          ctx.globalAlpha = ((stroke.opacity / 100) * style.opacityMultiplier) * (1 - offset * 0.2);
-          ctx.beginPath();
-          ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-          
-          for (let i = 1; i < stroke.points.length; i++) {
-            const jitter = (Math.random() - 0.5) * 0.5;
-            ctx.lineTo(stroke.points[i].x + jitter, stroke.points[i].y + jitter);
-          }
-          ctx.stroke();
-        }
-        break;
-
-      case 'marker':
-        // Marker: bold, saturated, slightly textured edges
-        ctx.strokeStyle = stroke.color;
-        ctx.globalAlpha = (stroke.opacity / 100) * style.opacityMultiplier;
-        
-        // Main stroke
-        ctx.beginPath();
-        ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-        for (let i = 1; i < stroke.points.length; i++) {
-          ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
-        }
-        ctx.stroke();
-        
-        // Add slight edge texture
-        ctx.globalAlpha = ((stroke.opacity / 100) * style.opacityMultiplier) * 0.3;
-        ctx.lineWidth = style.width * 1.1;
-        ctx.beginPath();
-        ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-        for (let i = 1; i < stroke.points.length; i++) {
-          ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
-        }
-        ctx.stroke();
-        break;
-
-      case 'highlighter':
-        // Highlighter: wide, semi-transparent, soft edges
-        ctx.strokeStyle = stroke.color;
-        ctx.globalCompositeOperation = 'multiply';
-        ctx.globalAlpha = (stroke.opacity / 100) * style.opacityMultiplier;
-        
-        // Draw wider base
-        ctx.lineWidth = style.width;
-        ctx.beginPath();
-        ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-        for (let i = 1; i < stroke.points.length; i++) {
-          ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
-        }
-        ctx.stroke();
-        
-        // Add soft glow effect
-        ctx.globalAlpha = ((stroke.opacity / 100) * style.opacityMultiplier) * 0.5;
-        ctx.lineWidth = style.width * 1.2;
-        ctx.beginPath();
-        ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-        for (let i = 1; i < stroke.points.length; i++) {
-          ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
-        }
-        ctx.stroke();
-        
-        ctx.globalCompositeOperation = 'source-over';
-        break;
-
-      default: // pen
-        // Pen: smooth, clean, consistent
-        ctx.strokeStyle = stroke.color;
-        ctx.globalAlpha = stroke.opacity / 100;
-        
-        ctx.beginPath();
-        ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-        for (let i = 1; i < stroke.points.length; i++) {
-          ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
-        }
-        ctx.stroke();
-        break;
-    }
-    
-    ctx.globalAlpha = 1;
-  };
+  }, [drawElements, sessionId, userName]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -257,7 +252,8 @@ const WhiteboardCanvas: React.FC<WhiteboardCanvasProps> = ({
     });
 
     ctx.restore();
-  }, [transform]);
+  }, [transform, drawStroke]);
+  
 
   const isPointNearStroke = (point: { x: number; y: number }, stroke: DrawingStroke, threshold: number): boolean => {
     for (let i = 0; i < stroke.points.length - 1; i++) {
@@ -424,14 +420,14 @@ const WhiteboardCanvas: React.FC<WhiteboardCanvasProps> = ({
 
     const userId = localStorage.getItem('userId') || 'anonymous';
     
-    const newStroke: DrawingStroke = {
+  const newStroke: DrawingStroke = {
       id: `stroke_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       points: currentStroke,
       color: color,
       width: brushSize,
       opacity: opacity,
       sketchType: sketchType,
-      userId: username || 'anonymous',
+  userId: userName || 'anonymous',
       timestamp: Date.now()
     };
 
@@ -459,7 +455,9 @@ const WhiteboardCanvas: React.FC<WhiteboardCanvasProps> = ({
     <canvas
       ref={canvasRef}
       className="w-full h-full"
-      style={{ cursor: getCursor() }}
+      // Ensure the canvas has an explicit background so mood-driven
+      // page backgrounds do not show through the drawing area.
+      style={{ cursor: getCursor(), backgroundColor: 'var(--canvas-background, #ffffff)' }}
       onMouseDown={startDrawing}
       onMouseMove={draw}
       onMouseUp={stopDrawing}

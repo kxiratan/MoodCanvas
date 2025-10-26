@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import { handleMoodUpdate } from '../services/sentiment';
-import { MoodType } from '../types/mood';
+import { MoodType, MoodState } from '../types/mood';
 
 const router = express.Router();
 
@@ -13,14 +13,14 @@ if (!global.sessionMoods) {
 // Get current mood state for a session
 router.get('/:sessionId/mood', (req: Request, res: Response) => {
   const { sessionId } = req.params;
-  const moods = global.sessionMoods[sessionId] || [];
+  const moods: MoodState[] = global.sessionMoods[sessionId] || [];
   
   if (moods.length === 0) {
     return res.json({ type: 'neutral', intensity: 50, timestamp: Date.now() });
   }
 
   // Get moods from the last 5 minutes
-  const recentMoods = moods.filter(mood => 
+  const recentMoods = moods.filter((mood: MoodState) => 
     Date.now() - mood.timestamp < 5 * 60 * 1000
   );
 
@@ -29,7 +29,7 @@ router.get('/:sessionId/mood', (req: Request, res: Response) => {
   }
 
   // Calculate weighted average of recent moods
-  const weightedMoods = recentMoods.map(mood => {
+  const weightedMoods = recentMoods.map((mood: MoodState) => {
     const age = Date.now() - mood.timestamp;
     const weight = Math.max(0.1, 1 - (age / (5 * 60 * 1000)));
     return { ...mood, weight };
@@ -45,7 +45,7 @@ router.get('/:sessionId/mood', (req: Request, res: Response) => {
   };
 
   let totalWeight = 0;
-  weightedMoods.forEach(({ type, intensity, weight }) => {
+  weightedMoods.forEach(({ type, intensity, weight }: MoodState & { weight: number }) => {
     moodScores[type] += (intensity / 100) * weight;
     totalWeight += weight;
   });

@@ -15,7 +15,7 @@ const ChatSidebar: React.FC = () => {
   const [message, setMessage] = useState('');
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [reactions, setReactions] = useState<Record<string, Record<string, string[]>>>({});
-  const { chatMessages, addChatMessage } = useSession();
+  const { chatMessages, addChatMessage, sessionId } = useSession();
   const scrollRef = useRef<HTMLDivElement>(null);
   const userId = localStorage.getItem('userId') || 'anonymous';
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
@@ -48,24 +48,34 @@ const ChatSidebar: React.FC = () => {
   }, []);
 
   const handleSend = async () => {
-    if (!message.trim()) return;
+    const trimmedMessage = message.trim();
+    if (!trimmedMessage) return;
 
-    const { sessionId } = useSession();
+    // sessionId comes from context (ensures hooks rules are respected)
+    if (!sessionId) {
+      console.warn('No session selected - cannot send message');
+      return;
+    }
+
+    // Clear the input immediately
+    setMessage('');
+    setReplyingTo(null);
 
     // Add message to chat
     addChatMessage({
       userId,
       userName: 'You',
-      text: message,
+      text: trimmedMessage,
       replyTo: replyingTo || undefined
     });
 
-    // Analyze sentiment and update mood
+    // Send to server for analysis and broadcast via socket
     try {
-      const { mood, intensity } = await api.analyzeSentiment(message, sessionId);
+      // Chat will be emitted by SessionContext.addChatMessage
+      const { mood, intensity } = await api.analyzeSentiment(trimmedMessage, sessionId);
       
       // Adjust audio based on mood and intensity
-      switch(mood) {
+      switch (mood) {
         case 'positive':
           audioManager.registerChatActivity(intensity / 100, 'positive');
           break;
@@ -81,15 +91,11 @@ const ChatSidebar: React.FC = () => {
         default:
           audioManager.registerChatActivity(0.5, 'neutral');
       }
-      
       // Emit mood update to other users
       socketEvents.updateMood(sessionId, { type: mood, intensity, timestamp: Date.now() });
     } catch (error) {
-      console.error('Error analyzing sentiment:', error);
+      console.error('Error analyzing sentiment or sending message:', error);
     }
-
-    setMessage('');
-    setReplyingTo(null);
   };
 
   const handleReaction = (messageId: string, emoji: string) => {

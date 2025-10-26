@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSession } from '@/contexts/SessionContext';
-import { ThemeManager } from '@/utils/themeManager';
 import { audioManager } from '@/utils/audioManager';
 import { useCanvasTransform } from '@/hooks/useCanvasTransform';
 import WhiteboardCanvas from '@/components/WhiteboardCanvas';
@@ -269,8 +268,6 @@ const SessionPage: React.FC = () => {
     }
   }, [tool]);
 
-  const themeClasses = ThemeManager.getThemeClasses(currentMood.type);
-
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-purple-50 to-pink-50">
       <div className="bg-white/80 backdrop-blur-md border-b border-purple-200 shadow-sm px-4 py-2">
@@ -390,7 +387,7 @@ const SessionPage: React.FC = () => {
       />
 
       <div className="flex-1 flex overflow-hidden">
-        <div className={`flex-1 relative transition-all duration-1000 ${themeClasses}`}>
+  <div className={`flex-1 relative transition-all duration-1000`}>
           <WhiteboardCanvas
             tool={tool}
             color={color}
