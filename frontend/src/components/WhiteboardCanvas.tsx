@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useSession } from '@/contexts/SessionContext';
 import { DrawingStroke } from '@/types/canvas';
+import { socketEvents } from '@/services/api';
 
 interface WhiteboardCanvasProps {
   tool: 'pen' | 'eraser' | 'text';
@@ -35,9 +36,48 @@ const WhiteboardCanvas: React.FC<WhiteboardCanvasProps> = ({
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentStroke, setCurrentStroke] = useState<{ x: number; y: number }[]>([]);
   const [spacePressed, setSpacePressed] = useState(false);
-  const { canvasState, updateCanvas } = useSession();
+  const { sessionId, username } = useSession();
+  const drawingElements = useRef<DrawingStroke[]>([]);
+
+  const drawElements = (elements: DrawingStroke[]) => {
+    if (!canvasRef.current) return;
+    const ctx = canvasRef.current.getContext('2d');
+    if (!ctx) return;
+
+    // Clear canvas
+    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+
+    // Apply transform
+    ctx.save();
+    ctx.translate(transform.offsetX, transform.offsetY);
+    ctx.scale(transform.scale, transform.scale);
+
+    // Draw all elements
+    elements.forEach((element) => {
+      drawStroke(ctx, element);
+    });
+
+    ctx.restore();
+
+    // Store elements
+    drawingElements.current = elements;
+  };
 
   useEffect(() => {
+    if (!sessionId || !username) return;
+
+    // Set up socket event listener for canvas updates
+    socketEvents.onCanvasUpdate((elements) => {
+      if (canvasRef.current) {
+        drawElements(elements);
+      }
+    });
+
+    // Send current canvas state when joining
+    if (drawingElements.current.length > 0) {
+      socketEvents.updateCanvas(sessionId, drawingElements.current);
+    }
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Space' && !e.repeat) {
         e.preventDefault();
@@ -56,8 +96,9 @@ const WhiteboardCanvas: React.FC<WhiteboardCanvasProps> = ({
     window.addEventListener('keyup', handleKeyUp);
 
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keyup', handleKeyUp);
+      socketEvents.cleanup();
     };
   }, []);
 
@@ -211,12 +252,12 @@ const WhiteboardCanvas: React.FC<WhiteboardCanvasProps> = ({
     ctx.scale(transform.scale, transform.scale);
 
     // Draw all strokes with their specific styles
-    canvasState.strokes.forEach(stroke => {
+    drawingElements.current.forEach(stroke => {
       drawStroke(ctx, stroke);
     });
 
     ctx.restore();
-  }, [canvasState.strokes, transform]);
+  }, [transform]);
 
   const isPointNearStroke = (point: { x: number; y: number }, stroke: DrawingStroke, threshold: number): boolean => {
     for (let i = 0; i < stroke.points.length - 1; i++) {
@@ -286,18 +327,18 @@ const WhiteboardCanvas: React.FC<WhiteboardCanvasProps> = ({
 
     // Handle eraser
     if (tool === 'eraser') {
-      const strokesToRemove = canvasState.strokes.filter(stroke => 
+      const strokesToRemove = drawingElements.current.filter(stroke => 
         isPointNearStroke({ x, y }, stroke, brushSize + 5)
       );
       
       if (strokesToRemove.length > 0) {
-        const remainingStrokes = canvasState.strokes.filter(stroke => 
+        drawingElements.current = drawingElements.current.filter(stroke => 
           !strokesToRemove.includes(stroke)
         );
-        updateCanvas({
-          ...canvasState,
-          strokes: remainingStrokes
-        });
+        if (sessionId) {
+          socketEvents.updateCanvas(sessionId, drawingElements.current);
+        }
+        drawElements(drawingElements.current);
       }
     }
   };
@@ -323,18 +364,18 @@ const WhiteboardCanvas: React.FC<WhiteboardCanvasProps> = ({
 
     // Handle eraser
     if (tool === 'eraser') {
-      const strokesToRemove = canvasState.strokes.filter(stroke => 
+      const strokesToRemove = drawingElements.current.filter(stroke => 
         isPointNearStroke({ x, y }, stroke, brushSize + 5)
       );
       
       if (strokesToRemove.length > 0) {
-        const remainingStrokes = canvasState.strokes.filter(stroke => 
+        drawingElements.current = drawingElements.current.filter(stroke => 
           !strokesToRemove.includes(stroke)
         );
-        updateCanvas({
-          ...canvasState,
-          strokes: remainingStrokes
-        });
+        if (sessionId) {
+          socketEvents.updateCanvas(sessionId, drawingElements.current);
+        }
+        drawElements(drawingElements.current);
       }
       return;
     }
@@ -390,14 +431,18 @@ const WhiteboardCanvas: React.FC<WhiteboardCanvasProps> = ({
       width: brushSize,
       opacity: opacity,
       sketchType: sketchType,
-      userId,
+      userId: username || 'anonymous',
       timestamp: Date.now()
     };
 
-    updateCanvas({
-      ...canvasState,
-      strokes: [...canvasState.strokes, newStroke]
-    });
+    // Add stroke to local state
+    drawingElements.current = [...drawingElements.current, newStroke];
+    drawElements(drawingElements.current);
+
+    // Emit stroke to other users
+    if (sessionId) {
+      socketEvents.updateCanvas(sessionId, drawingElements.current);
+    }
 
     setIsDrawing(false);
     setCurrentStroke([]);

@@ -5,6 +5,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useSession } from '@/contexts/SessionContext';
 import { Send, Bot, Smile, Reply } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { audioManager } from '@/utils/audioManager';
+import { api, socketEvents } from '@/services/api';
+import { MoodType } from '@/types/mood';
 
 const EMOJI_REACTIONS = ['👍', '❤️', '😂', '🎉', '🤔', '👏', '🔥', '✨', '💯', '🙌'];
 
@@ -15,6 +18,7 @@ const ChatSidebar: React.FC = () => {
   const { chatMessages, addChatMessage } = useSession();
   const scrollRef = useRef<HTMLDivElement>(null);
   const userId = localStorage.getItem('userId') || 'anonymous';
+  const typingTimeoutRef = useRef<NodeJS.Timeout>();
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -22,15 +26,67 @@ const ChatSidebar: React.FC = () => {
     }
   }, [chatMessages]);
 
-  const handleSend = () => {
+  // Handle typing activity
+  const handleTyping = () => {
+    audioManager.registerChatActivity(0.3); // Lower intensity for typing
+    
+    // Clear previous timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    
+    // Set new timeout
+    typingTimeoutRef.current = setTimeout(() => {
+      // Activity will naturally decay
+    }, 1000);
+  };
+
+  // Initialize audio manager
+  useEffect(() => {
+    audioManager.initialize();
+    return () => audioManager.cleanup();
+  }, []);
+
+  const handleSend = async () => {
     if (!message.trim()) return;
 
+    const { sessionId } = useSession();
+
+    // Add message to chat
     addChatMessage({
       userId,
       userName: 'You',
       text: message,
       replyTo: replyingTo || undefined
     });
+
+    // Analyze sentiment and update mood
+    try {
+      const { mood, intensity } = await api.analyzeSentiment(message, sessionId);
+      
+      // Adjust audio based on mood and intensity
+      switch(mood) {
+        case 'positive':
+          audioManager.registerChatActivity(intensity / 100, 'positive');
+          break;
+        case 'energetic':
+          audioManager.registerChatActivity(intensity / 100, 'energetic');
+          break;
+        case 'negative':
+          audioManager.registerChatActivity(intensity / 100, 'negative');
+          break;
+        case 'calm':
+          audioManager.registerChatActivity(intensity / 100, 'calm');
+          break;
+        default:
+          audioManager.registerChatActivity(0.5, 'neutral');
+      }
+      
+      // Emit mood update to other users
+      socketEvents.updateMood(sessionId, { type: mood, intensity, timestamp: Date.now() });
+    } catch (error) {
+      console.error('Error analyzing sentiment:', error);
+    }
 
     setMessage('');
     setReplyingTo(null);
@@ -226,7 +282,10 @@ const ChatSidebar: React.FC = () => {
           <Input
             placeholder="Type a message..."
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            onChange={(e) => {
+              setMessage(e.target.value);
+              handleTyping();
+            }}
             onKeyPress={(e) => e.key === 'Enter' && handleSend()}
             className="border-purple-200 focus:border-purple-400 focus:ring-purple-400"
           />

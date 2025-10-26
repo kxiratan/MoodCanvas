@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSession } from '@/contexts/SessionContext';
 import { ThemeManager } from '@/utils/themeManager';
-import { AudioManager } from '@/utils/audioManager';
+import { audioManager } from '@/utils/audioManager';
 import { useCanvasTransform } from '@/hooks/useCanvasTransform';
 import WhiteboardCanvas from '@/components/WhiteboardCanvas';
 import DrawingTools from '@/components/DrawingTools';
@@ -44,9 +44,14 @@ const SessionPage: React.FC = () => {
   const [brushSize, setBrushSize] = useState(3);
   const [opacity, setOpacity] = useState(100);
   const [sketchType, setSketchType] = useState<'pen' | 'pencil' | 'marker' | 'highlighter'>('pen');
-  const [audioManager] = useState(() => new AudioManager());
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(0.3);
+
+  // Initialize audio manager
+  useEffect(() => {
+    audioManager.initialize();
+    return () => audioManager.cleanup();
+  }, []);
   const [copied, setCopied] = useState(false);
   const [textDialogOpen, setTextDialogOpen] = useState(false);
   const [textPosition, setTextPosition] = useState({ x: 0, y: 0 });

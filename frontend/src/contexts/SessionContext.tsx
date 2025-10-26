@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { api, socket, socketEvents } from '@/services/api';
+import { useToast } from '@/hooks/use-toast';
 import { Session, ChatMessage } from '@/types/session';
 import { CanvasState } from '@/types/canvas';
 import { MoodState } from '@/types/mood';
@@ -6,6 +8,7 @@ import { MoodEngine } from '@/utils/moodEngine';
 
 interface SessionContextType {
   currentSession: Session | null;
+  sessionId: string | null;
   canvasState: CanvasState;
   chatMessages: ChatMessage[];
   currentMood: MoodState;
@@ -234,6 +237,7 @@ export const SessionProvider: React.FC<SessionProviderProps> = ({ children }) =>
     <SessionContext.Provider
       value={{
         currentSession,
+        sessionId: currentSession?.id || null,
         canvasState,
         chatMessages,
         currentMood,
