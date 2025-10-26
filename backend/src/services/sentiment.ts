@@ -131,7 +131,6 @@ export const handleMoodUpdate = async (text: string): Promise<{ type: MoodType; 
   } catch (error) {
     console.error('Error analyzing sentiment:', error);
     return { type: 'neutral', intensity: 50 };
->>>>>>> Stashed changes
   }
 };
 
