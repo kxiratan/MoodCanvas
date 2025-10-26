@@ -1,15 +1,18 @@
 import { Server, Socket } from 'socket.io';
 import { handleMoodUpdate } from './services/sentiment';
+import { ClientToServerEvents, ServerToClientEvents, SocketEventData } from './types/socket';
 
 interface SessionData {
   users: Set<string>;
-  messages: Array<{ user: string; text: string; timestamp: number }>;
+  messages: Array<SocketEventData['chat_message_received']>;
 }
+
+type TypedSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
 
 const sessions: Map<string, SessionData> = new Map();
 
-export const setupSocketHandlers = (io: Server) => {
-  io.on('connection', (socket: Socket) => {
+export const setupSocketHandlers = (io: Server<ClientToServerEvents, ServerToClientEvents>) => {
+  io.on('connection', (socket: TypedSocket) => {
     let currentSession: string | null = null;
 
     // Join session
@@ -48,9 +51,14 @@ export const setupSocketHandlers = (io: Server) => {
 
       // Analyze sentiment and update mood
       const mood = await handleMoodUpdate(data.text);
+      const timestamp = Date.now();
       
       io.to(data.sessionId).emit('chat_message', message);
-      io.to(data.sessionId).emit('mood_update', mood);
+      io.to(data.sessionId).emit('mood_update', {
+        ...mood,
+        sessionId: data.sessionId,
+        timestamp
+      });
     });
 
     // Handle canvas update
